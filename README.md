@@ -1,6 +1,6 @@
 
 Update 1:
-After improving the learning results for some problem breeds and changing training parameters, accuracy of 93.6% is obtained.
+After improving the learning results for some problem breeds and changing training parameters, accuracy of almost 94% is obtained on validation, nearly 98% on training.
 ---------------
 V 0.1 
 I am using an updated Xception model which was trained using imagenet weights.
