@@ -1,3 +1,8 @@
+
+Update 1:
+After improving the learning results for some problem breeds and changing training parameters, accuracy of 93.6% is obtained.
+---------------
+V 0.1 
 I am using an updated Xception model which was trained using imagenet weights.
 
 Other models were tested such as Resnet50, InceptionV3, etc. but Xception was found to be the most accurate. 
