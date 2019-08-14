@@ -1,0 +1,547 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "_cell_guid": "657faca0-c88f-4138-8c62-cf9974e0c894",
+    "_uuid": "b30a120404b8e104774a292b45f0902e89acef68"
+   },
+   "source": [
+    "#Roush Kitty Tool\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#!export PATH=/usr/local/cuda-10.0/bin:$PATH\n",
+    "#!export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda-10.0/lib64/\n",
+    "#!config.gpu_options.allow_growth = True\n",
+    "import tensorflow as tf\n",
+    "\n",
+    "#sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "scrolled": true
+   },
+   "outputs": [],
+   "source": [
+    "tf.test.is_built_with_cuda() \n",
+    "#tf.test.is_gpu_available()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from tensorflow.compat.v1 import ConfigProto\n",
+    "from tensorflow.compat.v1 import InteractiveSession\n",
+    "config = ConfigProto()\n",
+    "config.gpu_options.allow_growth = True\n",
+    "session = InteractiveSession(config=config)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "tf.test.is_gpu_available()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "_cell_guid": "d4c4a3a8-93af-4cd2-a95b-32a2526ac3a2",
+    "_uuid": "151b0f031d10c081017bee0831d1e276148b413b"
+   },
+   "outputs": [],
+   "source": [
+    "%matplotlib inline\n",
+    "import numpy as np\n",
+    "from tensorflow.keras.preprocessing.image import ImageDataGenerator\n",
+    "import pandas as pd\n",
+    "import datetime as dt\n",
+    "import matplotlib.pyplot as plt\n",
+    "from mpl_toolkits.axes_grid1 import ImageGrid\n",
+    "from os import listdir, makedirs\n",
+    "from os.path import join, exists, expanduser\n",
+    "from tqdm import tqdm\n",
+    "from sklearn.metrics import log_loss, accuracy_score\n",
+    "from tensorflow.keras.preprocessing import image\n",
+    "from tensorflow.keras.applications.vgg16 import VGG16\n",
+    "from tensorflow.keras.applications.resnet50 import ResNet50\n",
+    "from tensorflow.keras.applications import xception\n",
+    "from tensorflow.keras.applications import inception_v3\n",
+    "from tensorflow.keras.applications.vgg16 import preprocess_input, decode_predictions\n",
+    "from sklearn.linear_model import LogisticRegression\n",
+    "from tensorflow.keras.callbacks import TensorBoard\n",
+    "from tensorflow.keras.applications import Xception\n",
+    "from tensorflow.keras.callbacks import ModelCheckpoint, LearningRateScheduler\n",
+    "from tensorflow.keras.models import Model\n",
+    "from tensorflow.keras.layers import Dense, Dropout\n",
+    "from tensorflow.keras.optimizers import RMSprop\n",
+    "from tensorflow.keras.preprocessing.image import ImageDataGenerator\n",
+    "from tensorflow.keras.regularizers import l2"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "_cell_guid": "7024f870-2c6f-4b86-a64e-adab46e34c1b",
+    "_uuid": "48c9f0e65f26fa26375dd32289f9c59bd1353d1a"
+   },
+   "source": [
+    "#loadLabels"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "_cell_guid": "8bcb2bda-88dc-4ad8-9177-0c126401c3e1",
+    "_uuid": "3f62e82d998e8b2ba3999542492e632c5083a901"
+   },
+   "outputs": [],
+   "source": [
+    "INPUT_SIZE = 299 #image input for xception model\n",
+    "NUM_CLASSES = 58 #Number of cat breeds\n",
+    "SEED = 42  #meaning of life\n",
+    "data_dir = ''\n",
+    "POOLING = 'avg'\n",
+    "\n",
+    "labels = pd.read_csv(join(data_dir, 'catLabels2.csv'))\n",
+    "print(len(listdir(join(data_dir, 'train'))), len(labels))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "_cell_guid": "f55b18df-3698-4146-9157-913227416e21",
+    "_uuid": "ab322ce7a697d43a883b1725c7f71bf4486fd5ed"
+   },
+   "outputs": [],
+   "source": [
+    "selected_breed_list = list(labels.groupby('breed').count().sort_values(by='id', ascending=False).head(NUM_CLASSES).index)\n",
+    "labels = labels[labels['breed'].isin(selected_breed_list)]\n",
+    "labels['target'] = 1\n",
+    "#print(labels)\n",
+    "labels['rank'] = labels['breed'].rank(ascending=0,method='dense')\n",
+    "labels_pivot = labels.pivot('id', 'breed', 'target').reset_index().fillna(0)\n",
+    "np.random.seed(seed=SEED)\n",
+    "rnd = np.random.random(len(labels))\n",
+    "train_idx = rnd < 0.75\n",
+    "valid_idx = rnd >= 0.25\n",
+    "y_train = labels_pivot[selected_breed_list].values\n",
+    "ytr = y_train[train_idx]\n",
+    "yv = y_train[valid_idx]\n",
+    "\n",
+    "\n",
+    "y_train = labels_pivot[selected_breed_list].values\n",
+    "trainy = y_train[train_idx]\n",
+    "valy = y_train[valid_idx]\n",
+    "namesYTest = labels_pivot[selected_breed_list]\n",
+    "print (namesYTest.head())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "selected_breed_list = list(labels.groupby('breed').count().sort_values(by='id', ascending=False).head(NUM_CLASSES).index)\n",
+    "labels = labels[labels['breed'].isin(selected_breed_list)]\n",
+    "labels['target'] = 1\n",
+    "#print(labels)\n",
+    "labels['rank'] = labels['breed'].rank(ascending=0,method='dense')\n",
+    "labels_pivot = labels.pivot('id', 'breed', 'target').reset_index().fillna(0)\n",
+    "np.random.seed(seed=SEED)\n",
+    "rnd = np.random.random(len(labels))\n",
+    "train_idx = rnd < 0.75\n",
+    "valid_idx = rnd >= 0.25\n",
+    "y_train = labels_pivot[selected_breed_list].values\n",
+    "ytr = y_train[train_idx]\n",
+    "yv = y_train[valid_idx]\n",
+    "\n",
+    "\n",
+    "y_train = labels_pivot[selected_breed_list].values\n",
+    "trainy = y_train[train_idx]\n",
+    "valy = y_train[valid_idx]\n",
+    "namesYTest = labels_pivot[selected_breed_list]\n",
+    "namesYTest.head().to_csv('headNew.csv')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "_cell_guid": "c48fc864-d70f-4045-96eb-12de12c0ad41",
+    "_uuid": "7d26cc67909b5bd70173b5f2ed8352b210e06fb3"
+   },
+   "outputs": [],
+   "source": [
+    "def read_img(img_id, train_or_test, size):\n",
+    "    \"\"\"Read and resize image.\n",
+    "    # Arguments\n",
+    "        img_id: string\n",
+    "        train_or_test: string 'train' or 'test'.\n",
+    "        size: resize the original image.\n",
+    "    # Returns\n",
+    "        Image as numpy array.\n",
+    "    \"\"\"\n",
+    "    img = image.load_img(join(data_dir, train_or_test, '%s' % img_id), target_size=size)\n",
+    "    img = image.img_to_array(img)\n",
+    "    return img"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "_cell_guid": "c9e29a84-5cad-49d7-9290-5f7755cb1d43",
+    "_uuid": "e8f19dc62979a04aaa396f9cd9b990751d372286"
+   },
+   "source": [
+    "# Get images "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "_cell_guid": "fe14c29b-42a0-45cb-a7a0-5f201c984ff6",
+    "_uuid": "7e5f115592134a49b4997903ccc9e7497797be1e"
+   },
+   "outputs": [],
+   "source": [
+    "x_train = np.zeros((len(labels), INPUT_SIZE, INPUT_SIZE, 3), dtype='float32')\n",
+    "for i, img_id in tqdm(enumerate(labels['id'])):\n",
+    "    img = read_img(img_id, 'train', (INPUT_SIZE, INPUT_SIZE))\n",
+    "    x = xception.preprocess_input(np.expand_dims(img.copy(), axis=0))\n",
+    "    x_train[i] = x\n",
+    "print('Train Images shape: {} size: {:,}'.format(x_train.shape, x_train.size))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "Xtr = x_train[train_idx]\n",
+    "Xv = x_train[valid_idx]\n",
+    "print((Xtr.shape, Xv.shape, ytr.shape, yv.shape))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# lr decay schedule\n",
+    "def lr_schedule(epoch):\n",
+    "    \"\"\"Learning Rate Schedule\n",
+    "    Learning rate is scheduled to be reduced after 80, 120epochs.\n",
+    "    Called automatically every epoch as part of callbacks during training.\n",
+    "    # Arguments\n",
+    "        epoch (int): The number of epochs\n",
+    "    # Returns\n",
+    "        lr (float32): learning rate\n",
+    "    \"\"\"\n",
+    "    lr = 1e-4\n",
+    "    if epoch > 120:\n",
+    "        lr *= 1-1\n",
+    "    elif epoch > 100:\n",
+    "        lr *= 1e-1\n",
+    "    elif epoch > 80:\n",
+    "        lr *= 1e-1\n",
+    "    print('Learning rate: ', lr)\n",
+    "    return lr"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "aug = ImageDataGenerator(rotation_range=10, zoom_range=0.1,\n",
+    "\twidth_shift_range=0.1, height_shift_range=0.1, shear_range=0.8,\n",
+    "\thorizontal_flip=True, fill_mode=\"nearest\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# pretrain dense layer\n",
+    "# to avoid large gradient to destroy the pretrained model\n",
+    "# build model\n",
+    "batch_size = 16\n",
+    "#tensorboard = TensorBoard('./logs')\n",
+    "\n",
+    "basic_model = Xception(include_top=False, weights='imagenet', pooling='avg')\n",
+    "\n",
+    "for layer in basic_model.layers:\n",
+    "    layer.trainable = False\n",
+    "\n",
+    "input_tensor = basic_model.input\n",
+    "# build top\n",
+    "x = basic_model.output\n",
+    "x = Dropout(.5)(x)\n",
+    "x = Dense(NUM_CLASSES, activation='softmax')(x)\n",
+    "\n",
+    "model = Model(inputs=input_tensor, outputs=x)\n",
+    "model.compile(optimizer=RMSprop(1e-3), loss='categorical_crossentropy', metrics=['accuracy'])\n",
+    "\n",
+    "model.fit_generator(aug.flow(Xtr, ytr, batch_size=16), validation_data=(Xv,yv), \n",
+    "                    epochs=40, \n",
+    "              #      validation_data=Xv,\n",
+    "             #       callbacks=[tensorboard],\n",
+    "           #         workers=4,\n",
+    "                    steps_per_epoch=len(x_train)/batch_size,\n",
+    "                    verbose=1)\n",
+    "\n",
+    "model.save('xceptionNewAug12.h5')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# train with whole model\n",
+    "# train model\n",
+    "from tensorflow.keras.models import load_model \n",
+    "model = load_model('xceptionNewAug12.h5')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#import gc\n",
+    "#gc.collect()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "scrolled": true
+   },
+   "outputs": [],
+   "source": [
+    "\n",
+    "\n",
+    "for layer in model.layers:\n",
+    "    layer.W_regularizer = l2(1e-2)\n",
+    "    layer.trainable = True\n",
+    "\n",
+    "model.compile(optimizer=RMSprop(lr_schedule(0)), loss='categorical_crossentropy', metrics=['accuracy'])\n",
+    "\n",
+    "# call backs\n",
+    "checkpointer = ModelCheckpoint(filepath='weights_xception.h5', verbose=1,\n",
+    "                               save_best_only=True)\n",
+    "\n",
+    "\n",
+    "lr = LearningRateScheduler(lr_schedule)\n",
+    "\n",
+    "# train dense layer\n",
+    "model.fit_generator(aug.flow(Xtr, ytr, batch_size=8), validation_data=(Xv,yv),\n",
+    "                    steps_per_epoch=400,\n",
+    "                    epochs=125, \n",
+    "                    callbacks=[checkpointer, lr],\n",
+    "                    initial_epoch=40,\n",
+    "         #           workers=4,\n",
+    "                    verbose=1)\n",
+    "\n",
+    "\n",
+    "\n",
+    "model.save('xception2NewAug12.h5')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "_cell_guid": "065777fc-0308-4526-823a-4915cd5024be",
+    "_uuid": "a1bdd346837a8ad7fbbe1f9b5cb424a33055117d"
+   },
+   "source": [
+    "#Old method LogReg on Xception bottleneck features which gets 65% accuracy"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "train_x_bf = model.predict(Xtr, batch_size=16, verbose=1)\n",
+    "valid_x_bf = model.predict(Xv, batch_size=16, verbose=1)\n",
+    "print('Xception train bottleneck features shape: {} size: {:,}'.format(train_x_bf.shape, train_x_bf.size))\n",
+    "print('Xception valid bottleneck features shape: {} size: {:,}'.format(valid_x_bf.shape, valid_x_bf.size))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "print (train_x_bf)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "_cell_guid": "dc8a93f1-1ee6-450d-90a3-8fa77f245b3b",
+    "_uuid": "db34ba100fb8a524487ed0b91134b6e65102e3fb"
+   },
+   "outputs": [],
+   "source": [
+    "logreg = LogisticRegression(multi_class='multinomial', solver='lbfgs', random_state=SEED, max_iter=10000000)\n",
+    "logreg.fit(train_x_bf, (ytr * range(NUM_CLASSES)).sum(axis=1))\n",
+    "valid_probs = logreg.predict_proba(valid_x_bf)\n",
+    "valid_preds = logreg.predict(valid_x_bf)\n",
+    "print('Validation LogLoss {}'.format(log_loss(yv, valid_probs)))\n",
+    "print('Validation Accuracy {}'.format(accuracy_score((yv * range(NUM_CLASSES)).sum(axis=1), valid_preds)))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "print (print('Validation Accuracy {}'.format(accuracy_score((yv * range(NUM_CLASSES)).sum(axis=1), valid_preds))))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "print (valid_idx)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "_cell_guid": "28ac6c7c-99c0-4afa-b396-58a5524e6ebc",
+    "_uuid": "646d482fb5c7b2a792abfbb6c05dd72a94f353a7"
+   },
+   "source": [
+    "# Check errors\n",
+    "#See which ones we get wrong"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "_cell_guid": "ff6da045-b279-4d49-a581-41fe6525b797",
+    "_uuid": "17ae76c56f08f8602ce0456c9b14f33581da76d5"
+   },
+   "outputs": [],
+   "source": [
+    "valid_breeds = (yv * range(NUM_CLASSES)).sum(axis=1)\n",
+    "error_idx = (valid_breeds != valid_preds)\n",
+    "for img_id, breed, pred in zip(labels.loc[valid_idx, 'id'].values[error_idx],\n",
+    "                                [selected_breed_list[int(b)] for b in valid_preds[error_idx]],\n",
+    "                                [selected_breed_list[int(b)] for b in valid_breeds[error_idx]]):\n",
+    "    fig, ax = plt.subplots(figsize=(5,5))\n",
+    "    img = read_img(img_id, 'train', (299, 299))\n",
+    "    ax.imshow(img / 255.)\n",
+    "    ax.text(10, 250, 'Label: %s' % pred, color='w', backgroundcolor='r', alpha=0.8)\n",
+    "    ax.text(10, 270, 'Prediction: %s' % breed, color='k', backgroundcolor='g', alpha=0.8)\n",
+    "    ax.axis('off')\n",
+    "    plt.show()                                                    "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "print (valid_breeds)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.6.8"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 1
+}
