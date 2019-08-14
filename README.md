@@ -1,6 +1,11 @@
+Update 2:
+V0.3  August 13 2019
+Increased the validation to 75:25 and filtered through pictures again. Lots of duplicates and useless pictures were removed. New model with 91% validation, 98% training accuracy obtained. Under 1 in 10 is alright. Most are it calling Chartreux as British Shorthair as the google results for Chartreux are almost all British Shorthairs, and vice verca lots of cross contamination. This occurs for many breeds so the output in kittyDeterminerMain.py entions similarities and also shows the 3 next closest cats the cat resembles.
 
+---------------------
 Update 1:
-After improving the learning results for some problem breeds and changing training parameters, accuracy of almost 94% is obtained on validation, nearly 98% on training.
+V0.2 After improving the learning results for some problem breeds and changing training parameters, accuracy of almost 94% is obtained on validation, nearly 98% on training.
+
 ---------------
 V 0.1 
 I am using an updated Xception model which was trained using imagenet weights.
